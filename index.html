@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🧱 El Mundo de Augusto</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; font-family: 'Segoe UI', monospace; overflow: hidden; }
+
+  #loading {
+    position: fixed; inset: 0; background: #1a1a2e;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 100; color: white;
+  }
+  #loading h1 { font-size: 2.5rem; color: #7cfc00; text-shadow: 0 0 20px #7cfc00; margin-bottom: 1rem; }
+  #loading p { color: #aaa; font-size: 1.1rem; margin-bottom: 2rem; }
+  .load-bar { width: 300px; height: 20px; background: #333; border: 2px solid #7cfc00; border-radius: 4px; overflow: hidden; }
+  .load-fill { height: 100%; background: linear-gradient(90deg, #7cfc00, #32cd32); width: 0; transition: width 0.1s; border-radius: 2px; }
+
+  #canvas { display: block; }
+
+  #ui {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; user-select: none;
+  }
+
+  /* Crosshair */
+  #crosshair {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: white; font-size: 1.5rem; opacity: 0.8;
+    text-shadow: 1px 1px 2px black;
+  }
+
+  /* Hotbar */
+  #hotbar {
+    position: absolute; bottom: 20px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 4px;
+    background: rgba(0,0,0,0.5);
+    padding: 6px; border-radius: 8px;
+    border: 2px solid rgba(255,255,255,0.3);
+    pointer-events: all;
+  }
+  .slot {
+    width: 52px; height: 52px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 6px; cursor: pointer;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-size: 1.5rem;
+    transition: all 0.1s;
+    background: rgba(0,0,0,0.4);
+    position: relative;
+  }
+  .slot:hover { border-color: white; transform: translateY(-2px); }
+  .slot.active {
+    border-color: #7cfc00; background: rgba(124,252,0,0.2);
+    transform: translateY(-4px);
+    box-shadow: 0 4px 15px rgba(124,252,0,0.4);
+  }
+  .slot-label {
+    position: absolute; bottom: 2px; right: 4px;
+    font-size: 0.55rem; color: #aaa; font-family: monospace;
+  }
+  .slot-key {
+    position: absolute; top: 2px; left: 4px;
+    font-size: 0.55rem; color: #7cfc00; font-family: monospace;
+  }
+
+  /* Info panel */
+  #info {
+    position: absolute; top: 12px; left: 12px;
+    background: rgba(0,0,0,0.65); color: white;
+    padding: 10px 14px; border-radius: 8px;
+    font-size: 0.78rem; line-height: 1.8;
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(4px);
+  }
+  #info .title { color: #7cfc00; font-size: 1rem; font-weight: bold; margin-bottom: 4px; }
+
+  /* Controls panel */
+  #controls {
+    position: absolute; top: 12px; right: 12px;
+    background: rgba(0,0,0,0.65); color: #ccc;
+    padding: 10px 14px; border-radius: 8px;
+    font-size: 0.75rem; line-height: 1.9;
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(4px);
+  }
+  #controls .title { color: #ffd700; font-size: 0.85rem; font-weight: bold; margin-bottom: 4px; }
+  .key { background: rgba(255,255,255,0.15); padding: 1px 5px; border-radius: 3px; font-family: monospace; color: white; }
+
+  /* Start screen */
+  #start-screen {
+    position: fixed; inset: 0;
+    background: linear-gradient(180deg, #1a6b3c 0%, #2d8c55 30%, #8B6914 70%, #6B4F1A 100%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 50; color: white;
+  }
+  #start-screen h1 {
+    font-size: 3.5rem; font-weight: 900;
+    color: #7cfc00; text-shadow: 4px 4px 0 #2a5200, -2px -2px 0 #2a5200;
+    letter-spacing: 2px; margin-bottom: 0.5rem;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.03)} }
+  #start-screen .sub { color: #d4f0a0; font-size: 1.2rem; margin-bottom: 3rem; opacity: 0.9; }
+  .start-btn {
+    background: linear-gradient(180deg, #5a9e3a, #3d7a28);
+    color: white; border: 3px solid #2d5c1a;
+    padding: 16px 48px; font-size: 1.3rem; font-weight: bold;
+    border-radius: 8px; cursor: pointer; letter-spacing: 1px;
+    box-shadow: 0 6px 0 #1a3a0a, inset 0 1px 0 rgba(255,255,255,0.3);
+    transition: all 0.1s;
+    pointer-events: all;
+  }
+  .start-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 0 #1a3a0a, inset 0 1px 0 rgba(255,255,255,0.3); }
+  .start-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #1a3a0a; }
+  .feature-list { display: flex; gap: 2rem; margin-bottom: 2.5rem; }
+  .feature { text-align: center; }
+  .feature .icon { font-size: 2.5rem; display: block; margin-bottom: 0.4rem; }
+  .feature .text { font-size: 0.85rem; color: #b8e090; }
+  #start-screen .blocks-deco {
+    display: flex; gap: 8px; margin-bottom: 2rem;
+  }
+  .block-deco {
+    width: 48px; height: 48px; border-radius: 6px;
+    border: 2px solid rgba(0,0,0,0.4);
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,0.15);
+  }
+
+  /* Message */
+  #msg {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, calc(-50% - 60px));
+    background: rgba(0,0,0,0.75); color: white;
+    padding: 8px 20px; border-radius: 20px;
+    font-size: 1rem; pointer-events: none;
+    opacity: 0; transition: opacity 0.3s;
+    white-space: nowrap;
+  }
+  #msg.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading">
+  <h1>🧱 Mundo de Augusto</h1>
+  <p>Generando mundo...</p>
+  <div class="load-bar"><div class="load-fill" id="load-fill"></div></div>
+</div>
+
+<!-- START SCREEN -->
+<div id="start-screen" style="display:none">
+  <h1>🧱 EL MUNDO DE AUGUSTO</h1>
+  <p class="sub">¡Construye, destruye y explora tu propio mundo!</p>
+  <div class="blocks-deco">
+    <div class="block-deco" style="background:linear-gradient(135deg,#5a9e3a,#3d7a28)"></div>
+    <div class="block-deco" style="background:linear-gradient(135deg,#8B6914,#6B4F1A)"></div>
+    <div class="block-deco" style="background:linear-gradient(135deg,#888,#555)"></div>
+    <div class="block-deco" style="background:linear-gradient(135deg,#a06830,#7a4a18)"></div>
+    <div class="block-deco" style="background:linear-gradient(135deg,#4a90d9,#2a6aaa)"></div>
+    <div class="block-deco" style="background:linear-gradient(135deg,#e0e0e0,#aaa)"></div>
+  </div>
+  <div class="feature-list">
+    <div class="feature"><span class="icon">🌍</span><span class="text">Mundo 3D</span></div>
+    <div class="feature"><span class="icon">🏗️</span><span class="text">Construir</span></div>
+    <div class="feature"><span class="icon">💣</span><span class="text">Destruir</span></div>
+    <div class="feature"><span class="icon">🎮</span><span class="text">Explorar</span></div>
+  </div>
+  <button class="start-btn" id="play-btn">▶ JUGAR AHORA</button>
+</div>
+
+<!-- GAME -->
+<canvas id="canvas"></canvas>
+
+<div id="ui" style="display:none">
+  <!-- Crosshair -->
+  <div id="crosshair">+</div>
+
+  <!-- Info -->
+  <div id="info">
+    <div class="title">🧱 Mundo de Augusto</div>
+    <div id="pos-info">Pos: 0, 0, 0</div>
+    <div id="block-info">Bloque: Césped</div>
+    <div id="count-info">Bloques: 0</div>
+  </div>
+
+  <!-- Controls -->
+  <div id="controls">
+    <div class="title">🎮 Controles</div>
+    <div><span class="key">WASD</span> Mover</div>
+    <div><span class="key">Mouse</span> Mirar</div>
+    <div><span class="key">Espacio</span> Saltar</div>
+    <div><span class="key">Clic Izq</span> Destruir</div>
+    <div><span class="key">Clic Der</span> Colocar</div>
+    <div><span class="key">1-7</span> Seleccionar</div>
+    <div><span class="key">Rueda</span> Cambiar bloque</div>
+    <div><span class="key">Esc</span> Pausar</div>
+  </div>
+
+  <!-- Hotbar -->
+  <div id="hotbar"></div>
+
+  <!-- Message -->
+  <div id="msg"></div>
+</div>
+
+<script>
+// ============================================================
+//  EL MUNDO DE AUGUSTO — Minecraft-style voxel game
+// ============================================================
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// Block types
+const BLOCKS = [
+  { id: 0, name: 'Aire',      color: null,    top: null,    side: null,    emoji: '🌫️' },
+  { id: 1, name: 'Césped',   color: '#3d7a28', top: '#5a9e3a', side: '#6B8C4A', emoji: '🟩' },
+  { id: 2, name: 'Tierra',   color: '#6B4F1A', top: '#7a5a20', side: '#7a5a20', emoji: '🟫' },
+  { id: 3, name: 'Piedra',   color: '#666',    top: '#888',    side: '#777',    emoji: '⬜' },
+  { id: 4, name: 'Madera',   color: '#7a4a18', top: '#a06830', side: '#8B5a28', emoji: '🪵' },
+  { id: 5, name: 'Agua',     color: '#1a6bcc', top: '#2a8aee', side: '#1a70cc', emoji: '🟦' },
+  { id: 6, name: 'Arena',    color: '#c8b060', top: '#e0c870', side: '#d0b860', emoji: '🟡' },
+  { id: 7, name: 'Ladrillo', color: '#8B3a2a', top: '#a04838', side: '#953830', emoji: '🧱' },
+  { id: 8, name: 'Nieve',    color: '#d0e8f8', top: '#eef8ff', side: '#e0f0fc', emoji: '⬜' },
+  { id: 9, name: 'Oro',      color: '#c8a000', top: '#f0c000', side: '#d8b000', emoji: '💛' },
+];
+
+const WORLD_W = 32, WORLD_H = 20, WORLD_D = 32;
+let world = new Uint8Array(WORLD_W * WORLD_H * WORLD_D);
+let placedCount = 0;
+
+function wi(x, y, z) {
+  if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H || z < 0 || z >= WORLD_D) return -1;
+  return x + y * WORLD_W + z * WORLD_W * WORLD_H;
+}
+function getBlock(x, y, z) { const i = wi(x,y,z); return i < 0 ? 0 : world[i]; }
+function setBlock(x, y, z, t) { const i = wi(x,y,z); if (i >= 0) world[i] = t; }
+
+// Generate terrain
+function generateWorld() {
+  // Simple heightmap
+  for (let x = 0; x < WORLD_W; x++) {
+    for (let z = 0; z < WORLD_D; z++) {
+      const nx = x / WORLD_W, nz = z / WORLD_D;
+      const h = Math.floor(
+        4 +
+        3 * Math.sin(nx * Math.PI * 3.2) * Math.cos(nz * Math.PI * 2.7) +
+        2 * Math.sin(nx * Math.PI * 7 + 1) * Math.sin(nz * Math.PI * 5 + 0.5) +
+        1.5 * Math.cos(nx * Math.PI * 12 + 2) +
+        1 * Math.sin(nz * Math.PI * 9 + 1.5)
+      );
+      const height = Math.max(2, Math.min(WORLD_H - 2, h));
+      for (let y = 0; y <= height; y++) {
+        if (y === height) setBlock(x, y, z, 1);       // grass
+        else if (y >= height - 2) setBlock(x, y, z, 2); // dirt
+        else setBlock(x, y, z, 3);                     // stone
+      }
+      // Water in low spots
+      if (height <= 3) {
+        for (let y = height + 1; y <= 3; y++) setBlock(x, y, z, 5);
+      }
+      // Some sand near water
+      if (height === 4) {
+        setBlock(x, height, z, 6);
+      }
+    }
+  }
+  // Add some trees
+  for (let t = 0; t < 14; t++) {
+    const tx = 3 + Math.floor(Math.random() * (WORLD_W - 6));
+    const tz = 3 + Math.floor(Math.random() * (WORLD_D - 6));
+    let ty = 0;
+    for (let y = WORLD_H - 1; y >= 0; y--) {
+      if (getBlock(tx, y, tz) === 1) { ty = y + 1; break; }
+    }
+    if (ty > 5) {
+      const trunk = 3 + Math.floor(Math.random() * 2);
+      for (let y = ty; y < ty + trunk && y < WORLD_H; y++) setBlock(tx, y, tz, 4);
+      // Leaves
+      const top = ty + trunk;
+      for (let lx = -2; lx <= 2; lx++) for (let lz = -2; lz <= 2; lz++) for (let ly = -1; ly <= 1; ly++) {
+        if (Math.abs(lx) + Math.abs(lz) + Math.abs(ly) < 4) {
+          if (!getBlock(tx+lx, top+ly, tz+lz)) setBlock(tx+lx, top+ly, tz+lz, 1);
+        }
+      }
+    }
+  }
+}
+
+// ---- PLAYER ----
+const player = {
+  x: WORLD_W/2, y: WORLD_H, z: WORLD_D/2,
+  vx: 0, vy: 0, vz: 0,
+  yaw: 0, pitch: 0,
+  onGround: false,
+  selectedSlot: 0,
+  inventory: [1,2,3,4,5,6,7,8,9],
+};
+
+// Find spawn
+function findSpawn() {
+  const cx = Math.floor(WORLD_W/2), cz = Math.floor(WORLD_D/2);
+  for (let y = WORLD_H-1; y >= 0; y--) {
+    if (getBlock(cx, y, cz) !== 0) { player.y = y + 1.6; player.x = cx + 0.5; player.z = cz + 0.5; break; }
+  }
+}
+
+// ---- CAMERA ----
+function getCamDir() {
+  const yaw = player.yaw, pitch = player.pitch;
+  return {
+    x: Math.cos(pitch) * Math.sin(yaw),
+    y: Math.sin(pitch),
+    z: Math.cos(pitch) * Math.cos(yaw),
+  };
+}
+
+// ---- INPUT ----
+const keys = {};
+let mouseX = 0, mouseY = 0;
+let pointerLocked = false;
+
+document.addEventListener('keydown', e => { keys[e.code] = true; e.preventDefault?.(); });
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+canvas.addEventListener('click', () => {
+  if (!gameStarted) return;
+  canvas.requestPointerLock();
+});
+
+document.addEventListener('pointerlockchange', () => {
+  pointerLocked = document.pointerLockElement === canvas;
+});
+
+document.addEventListener('mousemove', e => {
+  if (!pointerLocked) return;
+  player.yaw   += e.movementX * 0.003;
+  player.pitch -= e.movementY * 0.003;
+  player.pitch = Math.max(-Math.PI/2 + 0.05, Math.min(Math.PI/2 - 0.05, player.pitch));
+});
+
+canvas.addEventListener('mousedown', e => {
+  if (!pointerLocked) return;
+  if (e.button === 0) destroyBlock();
+  if (e.button === 2) placeBlock();
+});
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+document.addEventListener('wheel', e => {
+  if (!gameStarted) return;
+  if (e.deltaY > 0) player.selectedSlot = (player.selectedSlot + 1) % 7;
+  else player.selectedSlot = (player.selectedSlot + 6) % 7;
+  updateHotbar();
+});
+
+document.addEventListener('keydown', e => {
+  const num = parseInt(e.key);
+  if (num >= 1 && num <= 7) { player.selectedSlot = num - 1; updateHotbar(); }
+  if (e.code === 'Escape') document.exitPointerLock?.();
+});
+
+// ---- RAYCASTING (DDA) ----
+function raycast(maxDist = 6) {
+  const dir = getCamDir();
+  let x = player.x, y = player.y, z = player.z;
+  const stepX = dir.x >= 0 ? 1 : -1;
+  const stepY = dir.y >= 0 ? 1 : -1;
+  const stepZ = dir.z >= 0 ? 1 : -1;
+  const tDeltaX = Math.abs(1 / dir.x);
+  const tDeltaY = Math.abs(1 / dir.y);
+  const tDeltaZ = Math.abs(1 / dir.z);
+  let ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+  let tMaxX = dir.x !== 0 ? (stepX > 0 ? (ix+1-x) : (x-ix)) * tDeltaX : Infinity;
+  let tMaxY = dir.y !== 0 ? (stepY > 0 ? (iy+1-y) : (y-iy)) * tDeltaY : Infinity;
+  let tMaxZ = dir.z !== 0 ? (stepZ > 0 ? (iz+1-z) : (z-iz)) * tDeltaZ : Infinity;
+  let lastFace = null;
+  for (let i = 0; i < Math.floor(maxDist * 3); i++) {
+    if (tMaxX < tMaxY) {
+      if (tMaxX < tMaxZ) { ix += stepX; lastFace = stepX > 0 ? 'west' : 'east'; tMaxX += tDeltaX; }
+      else { iz += stepZ; lastFace = stepZ > 0 ? 'north' : 'south'; tMaxZ += tDeltaZ; }
+    } else {
+      if (tMaxY < tMaxZ) { iy += stepY; lastFace = stepY > 0 ? 'bottom' : 'top'; tMaxY += tDeltaY; }
+      else { iz += stepZ; lastFace = stepZ > 0 ? 'north' : 'south'; tMaxZ += tDeltaZ; }
+    }
+    const b = getBlock(ix, iy, iz);
+    if (b !== 0) return { x: ix, y: iy, z: iz, block: b, face: lastFace };
+    const dist = Math.sqrt((ix-x)**2 + (iy-y)**2 + (iz-z)**2);
+    if (dist > maxDist) break;
+  }
+  return null;
+}
+
+function destroyBlock() {
+  const hit = raycast();
+  if (!hit) return;
+  if (hit.block !== 0) {
+    setBlock(hit.x, hit.y, hit.z, 0);
+    placedCount--;
+    showMsg('💥 Bloque destruido!');
+    updateInfo();
+  }
+}
+
+function placeBlock() {
+  const hit = raycast();
+  if (!hit) return;
+  const blockType = player.inventory[player.selectedSlot];
+  let px = hit.x, py = hit.y, pz = hit.z;
+  if (hit.face === 'west') px--;
+  else if (hit.face === 'east') px++;
+  else if (hit.face === 'bottom') py--;
+  else if (hit.face === 'top') py++;
+  else if (hit.face === 'north') pz--;
+  else if (hit.face === 'south') pz++;
+  // Don't place inside player
+  const pgx = Math.floor(player.x), pgy = Math.floor(player.y), pgz = Math.floor(player.z);
+  if (px === pgx && (py === pgy || py === pgy - 1) && pz === pgz) return;
+  if (getBlock(px,py,pz) === 0) {
+    setBlock(px, py, pz, blockType);
+    placedCount++;
+    showMsg(`✅ ${BLOCKS[blockType].name} colocado!`);
+    updateInfo();
+  }
+}
+
+// ---- PHYSICS ----
+function updatePhysics(dt) {
+  const speed = 5;
+  const yaw = player.yaw;
+  let dx = 0, dz = 0;
+  if (keys['KeyW'] || keys['ArrowUp'])    { dx += Math.sin(yaw); dz += Math.cos(yaw); }
+  if (keys['KeyS'] || keys['ArrowDown'])  { dx -= Math.sin(yaw); dz -= Math.cos(yaw); }
+  if (keys['KeyA'] || keys['ArrowLeft'])  { dx -= Math.cos(yaw); dz += Math.sin(yaw); }
+  if (keys['KeyD'] || keys['ArrowRight']) { dx += Math.cos(yaw); dz -= Math.sin(yaw); }
+  const len = Math.sqrt(dx*dx + dz*dz);
+  if (len > 0) { dx /= len; dz /= len; }
+
+  player.vx = dx * speed;
+  player.vz = dz * speed;
+  player.vy -= 22 * dt; // gravity
+
+  if ((keys['Space']) && player.onGround) {
+    player.vy = 8;
+    player.onGround = false;
+  }
+
+  // Move with collision
+  moveAxis('x', player.vx * dt);
+  moveAxis('y', player.vy * dt);
+  moveAxis('z', player.vz * dt);
+}
+
+function moveAxis(axis, delta) {
+  const size = 0.3;
+  let nx = player.x, ny = player.y, nz = player.z;
+  if (axis === 'x') nx += delta;
+  if (axis === 'y') ny += delta;
+  if (axis === 'z') nz += delta;
+
+  // Check collision (player is 0.6 wide, 1.8 tall)
+  const collide = checkCollision(nx, ny, nz, size);
+  if (!collide) {
+    player.x = nx; player.y = ny; player.z = nz;
+    if (axis === 'y') player.onGround = false;
+  } else {
+    if (axis === 'y') {
+      if (delta < 0) player.onGround = true;
+      player.vy = 0;
+    }
+    if (axis === 'x') player.vx = 0;
+    if (axis === 'z') player.vz = 0;
+  }
+  // Keep in world
+  player.x = Math.max(0.5, Math.min(WORLD_W - 0.5, player.x));
+  player.z = Math.max(0.5, Math.min(WORLD_D - 0.5, player.z));
+  player.y = Math.max(0, player.y);
+}
+
+function checkCollision(x, y, z, r) {
+  const feet = y - 1.7, head = y + 0.05;
+  for (let bx = Math.floor(x - r); bx <= Math.floor(x + r); bx++) {
+    for (let bz = Math.floor(z - r); bz <= Math.floor(z + r); bz++) {
+      for (let by = Math.floor(feet); by <= Math.floor(head); by++) {
+        if (getBlock(bx, by, bz) !== 0 && getBlock(bx, by, bz) !== 5) return true;
+      }
+    }
+  }
+  return false;
+}
+
+// ---- RENDERER ----
+// Isometric/perspective renderer using canvas 2D
+// We use a simple raycasting approach with column rendering
+
+let W, H;
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Column-based renderer
+const FOV = Math.PI / 2.5;
+const HALF_FOV = FOV / 2;
+
+function render() {
+  if (!W || !H) return;
+  const dir = getCamDir();
+  const camX = player.x, camY = player.y, camZ = player.z;
+  const yaw = player.yaw, pitch = player.pitch;
+
+  // Sky gradient
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+  skyGrad.addColorStop(0, '#1a6bcc');
+  skyGrad.addColorStop(0.6, '#3a9fe0');
+  skyGrad.addColorStop(1, '#c8e8f8');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Ground (simple)
+  ctx.fillStyle = '#3d5a28';
+  ctx.fillRect(0, H * 0.5 + pitch * H * 0.5, W, H);
+
+  // Depth buffer
+  const depthBuf = new Float32Array(W).fill(Infinity);
+
+  // Draw visible faces using a painter's algorithm (simplified)
+  // Collect visible blocks
+  const blocks = [];
+  const renderDist = 12;
+  const px = Math.floor(camX), py = Math.floor(camY), pz = Math.floor(camZ);
+
+  for (let x = px - renderDist; x <= px + renderDist; x++) {
+    for (let z = pz - renderDist; z <= pz + renderDist; z++) {
+      for (let y = 0; y < WORLD_H; y++) {
+        const b = getBlock(x, y, z);
+        if (b === 0) continue;
+        // Frustum cull (rough)
+        const dx = x + 0.5 - camX, dy = y + 0.5 - camY, dz = z + 0.5 - camZ;
+        // Dot product with view direction (rough front-face)
+        const dot = dx * dir.x + dy * dir.y + dz * dir.z;
+        if (dot < -1.5) continue;
+        const dist2 = dx*dx + dy*dy + dz*dz;
+        if (dist2 > renderDist * renderDist) continue;
+        blocks.push({ x, y, z, b, dist2 });
+      }
+    }
+  }
+
+  // Sort back to front
+  blocks.sort((a, b) => b.dist2 - a.dist2);
+
+  // Perspective projection
+  const focalLen = (W / 2) / Math.tan(HALF_FOV);
+  const cosYaw = Math.cos(yaw), sinYaw = Math.sin(yaw);
+  const cosPitch = Math.cos(pitch), sinPitch = Math.sin(pitch);
+
+  function project(wx, wy, wz) {
+    const dx = wx - camX, dy = wy - camY, dz = wz - camZ;
+    // Rotate by yaw
+    const rx = dx * cosYaw - dz * sinYaw;
+    const rz = dx * sinYaw + dz * cosYaw;
+    const ry = dy;
+    // Rotate by pitch
+    const pry = ry * cosPitch - rz * sinPitch;
+    const prz = ry * sinPitch + rz * cosPitch;
+    if (prz < 0.1) return null;
+    const sx = W/2 + (rx / prz) * focalLen;
+    const sy = H/2 - (pry / prz) * focalLen;
+    return { sx, sy, z: prz };
+  }
+
+  // Draw each block's visible faces
+  for (const bl of blocks) {
+    const { x, y, z, b } = bl;
+    const block = BLOCKS[b];
+
+    // Which faces are exposed?
+    const faces = [
+      { nx:0,  ny:0,  nz:-1, color: block.side,  label:'front'  },
+      { nx:0,  ny:0,  nz:1,  color: block.side,  label:'back'   },
+      { nx:-1, ny:0,  nz:0,  color: block.color, label:'left'   },
+      { nx:1,  ny:0,  nz:0,  color: block.color, label:'right'  },
+      { nx:0,  ny:1,  nz:0,  color: block.top,   label:'top'    },
+      { nx:0,  ny:-1, nz:0,  color: block.side,  label:'bottom' },
+    ];
+
+    for (const face of faces) {
+      if (!face.color) continue;
+      const nx = x + face.nx, ny = y + face.ny, nz = z + face.nz;
+      if (getBlock(nx, ny, nz) !== 0) continue; // occluded
+
+      // Face vertices
+      const verts = getFaceVerts(x, y, z, face.label);
+      const projected = verts.map(v => project(v[0], v[1], v[2]));
+      if (projected.some(p => !p)) continue;
+
+      const avgZ = projected.reduce((s, p) => s + p.z, 0) / 4;
+      if (avgZ < 0.1) continue;
+
+      // Check if behind us
+      if (projected.every(p => p.z < 0)) continue;
+
+      // Shading
+      let shade = 1;
+      if (face.label === 'top') shade = 1.0;
+      else if (face.label === 'front' || face.label === 'back') shade = 0.75;
+      else if (face.label === 'left' || face.label === 'right') shade = 0.85;
+      else shade = 0.5;
+
+      // Draw face
+      const col = shadeColor(face.color, shade);
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.moveTo(projected[0].sx, projected[0].sy);
+      for (let i = 1; i < projected.length; i++) {
+        ctx.lineTo(projected[i].sx, projected[i].sy);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // Subtle outline
+      ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
+  }
+
+  // Draw crosshair highlight (targeted block)
+  const hit = raycast();
+  if (hit) {
+    const cx = hit.x, cy = hit.y, cz = hit.z;
+    const outline = [
+      [cx,cy,cz], [cx+1,cy,cz], [cx+1,cy+1,cz], [cx,cy+1,cz],
+      [cx,cy,cz+1], [cx+1,cy,cz+1], [cx+1,cy+1,cz+1], [cx,cy+1,cz+1],
+    ].map(v => project(v[0], v[1], v[2]));
+    if (outline.every(p => p && p.z > 0)) {
+      const edges = [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+      ctx.lineWidth = 1.5;
+      for (const [a, b2] of edges) {
+        const pa = outline[a], pb = outline[b2];
+        if (!pa || !pb) continue;
+        ctx.beginPath();
+        ctx.moveTo(pa.sx, pa.sy);
+        ctx.lineTo(pb.sx, pb.sy);
+        ctx.stroke();
+      }
+    }
+  }
+}
+
+function getFaceVerts(x, y, z, face) {
+  const x1=x, y1=y, z1=z, x2=x+1, y2=y+1, z2=z+1;
+  switch(face) {
+    case 'front':  return [[x1,y1,z1],[x2,y1,z1],[x2,y2,z1],[x1,y2,z1]];
+    case 'back':   return [[x2,y1,z2],[x1,y1,z2],[x1,y2,z2],[x2,y2,z2]];
+    case 'left':   return [[x1,y1,z2],[x1,y1,z1],[x1,y2,z1],[x1,y2,z2]];
+    case 'right':  return [[x2,y1,z1],[x2,y1,z2],[x2,y2,z2],[x2,y2,z1]];
+    case 'top':    return [[x1,y2,z1],[x2,y2,z1],[x2,y2,z2],[x1,y2,z2]];
+    case 'bottom': return [[x1,y1,z2],[x2,y1,z2],[x2,y1,z1],[x1,y1,z1]];
+  }
+}
+
+function shadeColor(hex, factor) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b2 = parseInt(hex.slice(5,7),16);
+  return `rgb(${Math.floor(r*factor)},${Math.floor(g*factor)},${Math.floor(b2*factor)})`;
+}
+
+// ---- HUD ----
+function buildHotbar() {
+  const hb = document.getElementById('hotbar');
+  hb.innerHTML = '';
+  for (let i = 0; i < 7; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'slot' + (i === player.selectedSlot ? ' active' : '');
+    slot.dataset.i = i;
+    const btype = BLOCKS[player.inventory[i]];
+    slot.innerHTML = `<span class="slot-key">${i+1}</span><span style="font-size:1.6rem">${btype.emoji}</span><span class="slot-label">${btype.name}</span>`;
+    slot.addEventListener('click', () => { player.selectedSlot = i; updateHotbar(); });
+    hb.appendChild(slot);
+  }
+}
+
+function updateHotbar() {
+  document.querySelectorAll('.slot').forEach((s, i) => {
+    s.classList.toggle('active', i === player.selectedSlot);
+  });
+  document.getElementById('block-info').textContent = 'Bloque: ' + BLOCKS[player.inventory[player.selectedSlot]].name;
+}
+
+function updateInfo() {
+  document.getElementById('pos-info').textContent =
+    `Pos: ${Math.floor(player.x)}, ${Math.floor(player.y)}, ${Math.floor(player.z)}`;
+  document.getElementById('count-info').textContent = `Colocados: ${Math.max(0, placedCount)}`;
+}
+
+let msgTimer = null;
+function showMsg(text) {
+  const el = document.getElementById('msg');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+// ---- GAME LOOP ----
+let lastTime = 0;
+let gameStarted = false;
+
+function gameLoop(ts) {
+  const dt = Math.min((ts - lastTime) / 1000, 0.05);
+  lastTime = ts;
+  if (gameStarted) {
+    updatePhysics(dt);
+    render();
+    updateInfo();
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+// ---- INIT ----
+async function init() {
+  const fill = document.getElementById('load-fill');
+  // Simulate loading
+  for (let i = 0; i <= 100; i += 5) {
+    fill.style.width = i + '%';
+    await new Promise(r => setTimeout(r, 40));
+  }
+  generateWorld();
+  findSpawn();
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('start-screen').style.display = 'flex';
+}
+
+document.getElementById('play-btn').addEventListener('click', () => {
+  document.getElementById('start-screen').style.display = 'none';
+  document.getElementById('ui').style.display = 'block';
+  buildHotbar();
+  updateInfo();
+  gameStarted = true;
+  canvas.requestPointerLock();
+  showMsg('¡Bienvenido al Mundo de Augusto! 🎮');
+});
+
+requestAnimationFrame(gameLoop);
+init();
+</script>
+</body>
+</html>
